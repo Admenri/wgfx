@@ -15,6 +15,9 @@ BindGroupLayout::BindGroupLayout(
       entries_(descriptor->entries,
                descriptor->entries + descriptor->entryCount) {
   CreateVulkanLayout();
+  device_->SetObjectLabel(
+      reinterpret_cast<uint64_t>(descriptor_set_layout_),
+      VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, descriptor->label);
 }
 
 BindGroupLayout::BindGroupLayout(
@@ -83,6 +86,10 @@ void BindGroupLayout::CreateVulkanLayout() {
                               &descriptor_set_layout_);
 }
 
-void BindGroupLayout::SetLabel(WGPUStringView label) {}
+void BindGroupLayout::SetLabel(WGPUStringView label) {
+  device_->SetObjectLabel(
+      reinterpret_cast<uint64_t>(descriptor_set_layout_),
+      VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, label);
+}
 
 }  // namespace gfx

@@ -43,12 +43,21 @@ Texture::Texture(RefPtr<Device> device,
   }
   image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
   image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  // viewFormats (srgb/non-srgb variants) require mutable format images;
+  // 3D images need the 2D-array-compatible flag for depth-slice views.
+  if (descriptor->viewFormatCount)
+    image_info.flags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+  if (dimension_ == WGPUTextureDimension_3D)
+    image_info.flags |= VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT;
 
   VmaAllocationCreateInfo alloc_info = {};
   alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
   vmaCreateImage(device_->GetVmaAllocator(), &image_info, &alloc_info,
                  &image_, &allocation_, nullptr);
+
+  device_->SetObjectLabel(reinterpret_cast<uint64_t>(image_),
+                          VK_OBJECT_TYPE_IMAGE, descriptor->label);
 
   // Transition the image into the layout shared by every operation.
   device_->RunOneTimeSubmit([&](VkCommandBuffer cmd) {
@@ -104,7 +113,10 @@ gfx::TextureView* Texture::CreateView(WGPUTextureViewDescriptor const * descript
   return ToAPIRef(new TextureView(RefPtr<Texture>(this), descriptor));
 }
 
-void Texture::SetLabel(WGPUStringView label) {}
+void Texture::SetLabel(WGPUStringView label) {
+  device_->SetObjectLabel(reinterpret_cast<uint64_t>(image_),
+                          VK_OBJECT_TYPE_IMAGE, label);
+}
 
 uint32_t Texture::GetWidth() { return extent_.width; }
 

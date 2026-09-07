@@ -35,6 +35,12 @@ class CommandBuffer : public WGPUCommandBufferImpl,
   // buffer has finished executing on the GPU.
   void KeepResource(RefHolder holder);
   void KeepVulkanResource(std::function<void()> destroy);
+  // Moves finished encoder resource lists into this command buffer.
+  void AdoptResources(std::vector<RefHolder> holders,
+                      std::vector<std::function<void()>> vulkan_cleanup) {
+    resources_ = std::move(holders);
+    vulkan_cleanup_ = std::move(vulkan_cleanup);
+  }
 
   void SetLabel(WGPUStringView label);
 

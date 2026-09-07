@@ -173,6 +173,9 @@ RenderPipeline::RenderPipeline(
       VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
   input_assembly.topology =
       GetPrimitiveTopology(descriptor->primitive.topology);
+  // stripIndexFormat != undefined enables primitive restart for strips.
+  input_assembly.primitiveRestartEnable =
+      descriptor->primitive.stripIndexFormat != WGPUIndexFormat_Undefined;
 
   VkPipelineViewportStateCreateInfo viewport_state = {};
   viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -182,6 +185,7 @@ RenderPipeline::RenderPipeline(
   VkPipelineRasterizationStateCreateInfo rasterization = {};
   rasterization.sType =
       VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+  const WGPUDepthStencilState* ds = descriptor->depthStencil;
   // VK_EXT_depth_clip_enable disables far-plane clipping for
   // WGPUFeatureName_DepthClipControl (primitive.unclippedDepth).
   VkPipelineRasterizationDepthClipStateCreateInfoEXT depth_clip_state = {};
@@ -196,6 +200,13 @@ RenderPipeline::RenderPipeline(
   rasterization.cullMode = GetCullMode(descriptor->primitive.cullMode);
   rasterization.frontFace = GetFrontFace(descriptor->primitive.frontFace);
   rasterization.lineWidth = 1.0f;
+  if (ds) {
+    rasterization.depthBiasEnable =
+        (ds->depthBias != 0 || ds->depthBiasSlopeScale != 0.0f);
+    rasterization.depthBiasConstantFactor = static_cast<float>(ds->depthBias);
+    rasterization.depthBiasClamp = ds->depthBiasClamp;
+    rasterization.depthBiasSlopeFactor = ds->depthBiasSlopeScale;
+  }
 
   VkPipelineMultisampleStateCreateInfo multisample = {};
   multisample.sType =
@@ -208,7 +219,6 @@ RenderPipeline::RenderPipeline(
   VkPipelineDepthStencilStateCreateInfo depth_stencil = {};
   depth_stencil.sType =
       VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-  const WGPUDepthStencilState* ds = descriptor->depthStencil;
   if (ds) {
     depth_stencil.depthTestEnable = ds->depthWriteEnabled == WGPUOptionalBool_True ||
                                     ds->depthCompare != WGPUCompareFunction_Always;
@@ -346,6 +356,9 @@ gfx::BindGroupLayout* RenderPipeline::GetBindGroupLayout(uint32_t groupIndex) {
   return layout;
 }
 
-void RenderPipeline::SetLabel(WGPUStringView label) {}
+void RenderPipeline::SetLabel(WGPUStringView label) {
+  device_->SetObjectLabel(reinterpret_cast<uint64_t>(pipeline_),
+                          VK_OBJECT_TYPE_PIPELINE, label);
+}
 
 }  // namespace gfx

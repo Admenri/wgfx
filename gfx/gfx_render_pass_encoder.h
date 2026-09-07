@@ -58,6 +58,13 @@ class RenderPassEncoder : public WGPURenderPassEncoderImpl,
   QuerySet* occlusion_query_set_ = nullptr;
   bool occlusion_reset_done_ = false;
   uint32_t occlusion_query_index_ = 0;
+  const WGPUPassTimestampWrites* timestamp_writes_ = nullptr;
+  struct ResolveOp {
+    VkImage src;
+    VkImage dst;
+    VkImageResolve region;
+  };
+  std::vector<ResolveOp> resolve_ops_;
 };
 
 }  // namespace gfx

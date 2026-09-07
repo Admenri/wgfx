@@ -42,6 +42,7 @@ class ComputePassEncoder : public WGPUComputePassEncoderImpl,
   VkCommandBuffer buffer_ = VK_NULL_HANDLE;
   ComputePipeline* current_pipeline_ = nullptr;
   bool ended_ = false;
+  const WGPUPassTimestampWrites* timestamp_writes_ = nullptr;
 };
 
 }  // namespace gfx

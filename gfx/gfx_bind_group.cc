@@ -119,6 +119,9 @@ BindGroup::BindGroup(RefPtr<Device> device, RefPtr<BindGroupLayout> layout,
     vkUpdateDescriptorSets(device_->GetVkDevice(),
                            static_cast<uint32_t>(writes.size()),
                            writes.data(), 0, nullptr);
+
+  device_->SetObjectLabel(reinterpret_cast<uint64_t>(descriptor_set_),
+                          VK_OBJECT_TYPE_DESCRIPTOR_SET, descriptor->label);
 }
 
 BindGroup::~BindGroup() {
@@ -126,6 +129,9 @@ BindGroup::~BindGroup() {
     vkDestroyDescriptorPool(device_->GetVkDevice(), descriptor_pool_, nullptr);
 }
 
-void BindGroup::SetLabel(WGPUStringView label) {}
+void BindGroup::SetLabel(WGPUStringView label) {
+  device_->SetObjectLabel(reinterpret_cast<uint64_t>(descriptor_set_),
+                          VK_OBJECT_TYPE_DESCRIPTOR_SET, label);
+}
 
 }  // namespace gfx

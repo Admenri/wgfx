@@ -50,6 +50,10 @@ class CommandEncoder : public WGPUCommandEncoderImpl,
   void PushDebugGroup(WGPUStringView groupLabel);
   void ResolveQuerySet(WGPUQuerySet querySet, uint32_t firstQuery, uint32_t queryCount, WGPUBuffer destination, uint64_t destinationOffset);
   void WriteTimestamp(WGPUQuerySet querySet, uint32_t queryIndex);
+  // Records a timestamp on the encoder's command buffer, resetting the
+  // query pool first if this is its first use in the command buffer.
+  void RecordTimestamp(WGPUQuerySet querySet, uint32_t queryIndex,
+                       VkPipelineStageFlags stage);
   void SetLabel(WGPUStringView label);
 
  private:

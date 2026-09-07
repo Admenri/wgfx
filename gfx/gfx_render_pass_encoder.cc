@@ -4,6 +4,8 @@
 
 #include "gfx/gfx_render_pass_encoder.h"
 
+#include <algorithm>
+
 #include "gfx/common/ref_holder.h"
 #include "gfx/common/vulkan_conversions.h"
 #include "vk_mem_alloc.h"
@@ -44,6 +46,7 @@ RenderPassEncoder::RenderPassEncoder(
   std::vector<VkAttachmentReference> color_refs;
   std::vector<VkClearValue> clear_values;
   VkAttachmentReference depth_ref = {};
+  std::vector<VkImageView> framebuffer_views;
   bool has_depth = false;
 
   for (size_t i = 0; i < descriptor->colorAttachmentCount; ++i) {
@@ -82,9 +85,56 @@ RenderPassEncoder::RenderPassEncoder(
                           Device::kImageLayout});
     attachments.push_back(vk_attachment);
     encoder_->KeepResource(RefHolder::Of(view));
-    if (attachment.resolveTarget)
-      encoder_->KeepResource(
-          RefHolder::Of(static_cast<gfx::TextureView*>(attachment.resolveTarget)));
+
+    gfx::Texture* attachment_texture = view->GetTexture();
+
+    // 3D texture attachment: depthSlice selects the rendered z-slice via a
+    // 2D-array view of the 3D image (created with the
+    // VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT flag).
+    VkImageView attachment_view_handle = view->GetVkImageView();
+    if (attachment_texture->GetDimension() == WGPUTextureDimension_3D &&
+        attachment.depthSlice != WGPU_DEPTH_SLICE_UNDEFINED) {
+      VkImageViewCreateInfo slice_view_info = {};
+      slice_view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+      slice_view_info.image = attachment_texture->GetVkImage();
+      slice_view_info.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+      slice_view_info.format = info.vk_format;
+      slice_view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+      slice_view_info.subresourceRange.levelCount =
+          attachment_texture->GetMipLevels();
+      slice_view_info.subresourceRange.baseArrayLayer = attachment.depthSlice;
+      slice_view_info.subresourceRange.layerCount = 1;
+      vkCreateImageView(vk_device, &slice_view_info, nullptr,
+                        &attachment_view_handle);
+      encoder_->KeepVulkanResource(
+          [device, v = attachment_view_handle] {
+            vkDestroyImageView(device->GetVkDevice(), v, nullptr);
+          });
+    }
+    framebuffer_views.push_back(attachment_view_handle);
+
+    // MSAA resolve: after the pass, resolve the multisample attachment
+    // into the single-sample resolve target.
+    if (attachment.resolveTarget) {
+      auto* resolve_view =
+          static_cast<gfx::TextureView*>(attachment.resolveTarget);
+      encoder_->KeepResource(RefHolder::Of(resolve_view));
+      gfx::Texture* resolve_texture = resolve_view->GetTexture();
+      if (attachment_texture->GetSampleCount() > 1) {
+        VkImageResolve region = {};
+        region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.extent.width =
+            std::min(attachment_texture->GetExtent().width,
+                     resolve_texture->GetExtent().width);
+        region.extent.height =
+            std::min(attachment_texture->GetExtent().height,
+                     resolve_texture->GetExtent().height);
+        region.extent.depth = 1;
+        resolve_ops_.push_back({attachment_texture->GetVkImage(),
+                                resolve_texture->GetVkImage(), region});
+      }
+    }
   }
 
   if (descriptor->depthStencilAttachment &&
@@ -150,13 +200,11 @@ RenderPassEncoder::RenderPassEncoder(
     vkDestroyRenderPass(device->GetVkDevice(), rp, nullptr);
   });
 
-  std::vector<VkImageView> framebuffer_views;
   uint32_t width = 1;
   uint32_t height = 1;
   for (size_t i = 0; i < descriptor->colorAttachmentCount; ++i) {
     auto* view = static_cast<gfx::TextureView*>(
         descriptor->colorAttachments[i].view);
-    framebuffer_views.push_back(view->GetVkImageView());
     width = view->GetTexture()->GetExtent().width;
     height = view->GetTexture()->GetExtent().height;
   }
@@ -187,6 +235,21 @@ RenderPassEncoder::RenderPassEncoder(
   if (descriptor->occlusionQuerySet)
     encoder_->KeepResource(
         RefHolder::Of(static_cast<gfx::QuerySet*>(descriptor->occlusionQuerySet)));
+
+  // Pass-level timestamp writes: beginning of pass fires before the render
+  // pass, end of pass after it (recorded in End()).
+  if (descriptor && descriptor->timestampWrites &&
+      descriptor->timestampWrites->querySet) {
+    timestamp_writes_ = descriptor->timestampWrites;
+    encoder_->KeepResource(
+        RefHolder::Of(static_cast<gfx::QuerySet*>(timestamp_writes_->querySet)));
+    if (timestamp_writes_->beginningOfPassWriteIndex !=
+        WGPU_QUERY_SET_INDEX_UNDEFINED) {
+      encoder_->RecordTimestamp(timestamp_writes_->querySet,
+                                timestamp_writes_->beginningOfPassWriteIndex,
+                                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+    }
+  }
 
   VkRenderPassBeginInfo begin_info = {};
   begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -344,6 +407,17 @@ void RenderPassEncoder::EndOcclusionQuery() {
 void RenderPassEncoder::End() {
   ended_ = true;
   vkCmdEndRenderPass(buffer_);
+  for (const ResolveOp& op : resolve_ops_) {
+    vkCmdResolveImage(buffer_, op.src, Device::kImageLayout, op.dst,
+                      Device::kImageLayout, 1, &op.region);
+  }
+  if (timestamp_writes_ &&
+      timestamp_writes_->endOfPassWriteIndex !=
+          WGPU_QUERY_SET_INDEX_UNDEFINED) {
+    encoder_->RecordTimestamp(timestamp_writes_->querySet,
+                              timestamp_writes_->endOfPassWriteIndex,
+                              VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+  }
 }
 
 void RenderPassEncoder::SetLabel(WGPUStringView label) {}

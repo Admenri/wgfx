@@ -70,6 +70,8 @@ class Adapter : public WGPUAdapterImpl, public RefCounted<Adapter> {
   bool clip_distances_ = false;
   bool texture_formats_tier1_ = false;
   bool texture_formats_tier2_ = false;
+  uint32_t subgroup_min_size_ = 0;
+  uint32_t subgroup_max_size_ = 0;
 };
 
 }  // namespace gfx

@@ -57,11 +57,17 @@ Adapter::Adapter(RefPtr<Instance> instance, VkPhysicalDevice physical)
   VkPhysicalDeviceSubgroupSizeControlFeatures subgroup_size_control = {};
   subgroup_size_control.sType =
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES;
+  VkPhysicalDeviceSubgroupSizeControlPropertiesEXT subgroup_size_props = {};
+  subgroup_size_props.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_PROPERTIES_EXT;
   features2.pNext = &vulkan11_features;
   vulkan11_features.pNext = &draw_parameters;
   draw_parameters.pNext = &float16_int8;
   float16_int8.pNext = &subgroup_size_control;
+  subgroup_size_control.pNext = &subgroup_size_props;
   vkGetPhysicalDeviceFeatures2(physical_, &features2);
+  subgroup_min_size_ = subgroup_size_props.minSubgroupSize;
+  subgroup_max_size_ = subgroup_size_props.maxSubgroupSize;
   const VkPhysicalDeviceFeatures& features = features2.features;
 
   VkPhysicalDeviceProperties2 properties2 = {};
@@ -317,6 +323,26 @@ WGPUStatus Adapter::GetInfo(WGPUAdapterInfo * info) {
   std::memcpy(description, "Vulkan adapter ", 15);
   info->description.data = description;
   info->description.length = 14;
+
+  info->backendType = WGPUBackendType_Vulkan;
+  switch (properties_.deviceType) {
+    case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+      info->adapterType = WGPUAdapterType_DiscreteGPU;
+      break;
+    case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+      info->adapterType = WGPUAdapterType_IntegratedGPU;
+      break;
+    case VK_PHYSICAL_DEVICE_TYPE_CPU:
+      info->adapterType = WGPUAdapterType_CPU;
+      break;
+    default:
+      info->adapterType = WGPUAdapterType_Unknown;
+      break;
+  }
+  info->vendorID = properties_.vendorID;
+  info->deviceID = properties_.deviceID;
+  info->subgroupMinSize = subgroup_min_size_;
+  info->subgroupMaxSize = subgroup_max_size_;
   return WGPUStatus_Success;
 }
 

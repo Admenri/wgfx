@@ -76,6 +76,9 @@ PipelineLayout::~PipelineLayout() {
     vkDestroyPipelineLayout(device_->GetVkDevice(), pipeline_layout_, nullptr);
 }
 
-void PipelineLayout::SetLabel(WGPUStringView label) {}
+void PipelineLayout::SetLabel(WGPUStringView label) {
+  device_->SetObjectLabel(reinterpret_cast<uint64_t>(pipeline_layout_),
+                          VK_OBJECT_TYPE_PIPELINE_LAYOUT, label);
+}
 
 }  // namespace gfx

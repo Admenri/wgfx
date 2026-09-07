@@ -78,6 +78,9 @@ gfx::BindGroupLayout* ComputePipeline::GetBindGroupLayout(uint32_t groupIndex) {
   return layout;
 }
 
-void ComputePipeline::SetLabel(WGPUStringView label) {}
+void ComputePipeline::SetLabel(WGPUStringView label) {
+  device_->SetObjectLabel(reinterpret_cast<uint64_t>(pipeline_),
+                          VK_OBJECT_TYPE_PIPELINE, label);
+}
 
 }  // namespace gfx

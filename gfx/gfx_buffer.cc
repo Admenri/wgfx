@@ -44,6 +44,8 @@ Buffer::Buffer(RefPtr<Device> device, WGPUBufferDescriptor const * descriptor)
   allocation_ = allocation;
   if (host_visible)
     mapped_data_ = allocation_info.pMappedData;
+  device_->SetObjectLabel(reinterpret_cast<uint64_t>(buffer_),
+                          VK_OBJECT_TYPE_BUFFER, descriptor->label);
 }
 
 Buffer::~Buffer() {
@@ -86,10 +88,14 @@ WGPUStatus Buffer::ReadMappedRange(size_t offset, void * data, size_t size) {
 
 WGPUStatus Buffer::WriteMappedRange(size_t offset, void const * data, size_t size) {
   std::memcpy(GetMappedRange(offset, size), data, size);
+  // Host-visible memory is not guaranteed coherent; make the write visible.
+  vmaFlushAllocation(device_->GetVmaAllocator(), allocation_, offset, size);
   return WGPUStatus_Success;
 }
 
 void Buffer::SetLabel(WGPUStringView label) {
+  device_->SetObjectLabel(reinterpret_cast<uint64_t>(buffer_),
+                          VK_OBJECT_TYPE_BUFFER, label);
 }
 
 WGPUBufferUsage Buffer::GetUsage() {

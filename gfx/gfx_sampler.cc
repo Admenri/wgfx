@@ -33,6 +33,8 @@ Sampler::Sampler(RefPtr<Device> device, WGPUSamplerDescriptor const * descriptor
   create_info.unnormalizedCoordinates = VK_FALSE;
 
   vkCreateSampler(device_->GetVkDevice(), &create_info, nullptr, &sampler_);
+  device_->SetObjectLabel(reinterpret_cast<uint64_t>(sampler_),
+                          VK_OBJECT_TYPE_SAMPLER, descriptor->label);
 }
 
 Sampler::~Sampler() {
@@ -40,6 +42,9 @@ Sampler::~Sampler() {
     vkDestroySampler(device_->GetVkDevice(), sampler_, nullptr);
 }
 
-void Sampler::SetLabel(WGPUStringView label) {}
+void Sampler::SetLabel(WGPUStringView label) {
+  device_->SetObjectLabel(reinterpret_cast<uint64_t>(sampler_),
+                          VK_OBJECT_TYPE_SAMPLER, label);
+}
 
 }  // namespace gfx

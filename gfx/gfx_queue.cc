@@ -196,6 +196,9 @@ void Queue::WriteTexture(WGPUTexelCopyTextureInfo const * destination, void cons
                    staging_allocation);
 }
 
-void Queue::SetLabel(WGPUStringView label) {}
+void Queue::SetLabel(WGPUStringView label) {
+  device_->SetObjectLabel(reinterpret_cast<uint64_t>(device_->GetVkQueue()),
+                          VK_OBJECT_TYPE_QUEUE, label);
+}
 
 }  // namespace gfx

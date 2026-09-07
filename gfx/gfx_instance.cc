@@ -62,8 +62,9 @@ Instance::Instance(WGPUInstanceDescriptor const * descriptor) {
 #endif
   create_info.ppEnabledExtensionNames = extensions;
 
-#if !defined(NDEBUG)
-  // Validation messages surface API misuse in debug builds only.
+#if !defined(NDEBUG) && !defined(WGFX_NO_VALIDATION)
+  // Validation messages surface API misuse in debug builds only. Define
+  // WGFX_NO_VALIDATION to opt out (e.g. for API-stress benchmarks).
   const char* validation_layers[] = {"VK_LAYER_KHRONOS_validation"};
   create_info.enabledLayerCount = 1;
   create_info.ppEnabledLayerNames = validation_layers;
@@ -123,6 +124,7 @@ bool Instance::TryFireFuture(uint64_t future_id, uint64_t timeout_ns) {
 gfx::Surface* Instance::CreateSurface(WGPUSurfaceDescriptor const * descriptor) {
   gfx::Surface* surface = new Surface(RefPtr<Instance>(this));
   surface->Initialize(descriptor);
+  surface->SetLabel(descriptor ? descriptor->label : WGPUStringView{});
   return ToAPIRef(surface);
 }
 
@@ -148,11 +150,24 @@ void Instance::ProcessEvents() {
 }
 
 WGPUFuture Instance::RequestAdapter(WGPURequestAdapterOptions const * options, WGPURequestAdapterCallbackInfo callbackInfo) {
-  // Enumerate and select a physical device synchronously.
-  uint32_t device_count = 0;
-  vkEnumeratePhysicalDevices(instance_, &device_count, nullptr);
-
   gfx::Adapter* selected = nullptr;
+
+  // Honor the adapter filters wgfx can express. There is no software
+  // fallback adapter; compatibility mode and non-Vulkan backends are not
+  // implemented, so those requests yield no adapter.
+  bool wants_fallback = options && options->forceFallbackAdapter;
+  bool backend_supported =
+      !options || options->backendType == WGPUBackendType_Undefined ||
+      options->backendType == WGPUBackendType_Vulkan;
+  bool feature_level_supported =
+      !options || options->featureLevel != WGPUFeatureLevel_Compatibility;
+  bool prefer_low_power =
+      options && options->powerPreference == WGPUPowerPreference_LowPower;
+
+  uint32_t device_count = 0;
+  if (!wants_fallback && backend_supported && feature_level_supported)
+    vkEnumeratePhysicalDevices(instance_, &device_count, nullptr);
+
   if (device_count) {
     std::vector<VkPhysicalDevice> physical_devices(device_count);
     vkEnumeratePhysicalDevices(instance_, &device_count,
@@ -162,17 +177,17 @@ WGPUFuture Instance::RequestAdapter(WGPURequestAdapterOptions const * options, W
     if (options && options->compatibleSurface)
       compatible_surface = static_cast<gfx::Surface*>(options->compatibleSurface);
 
+    VkPhysicalDeviceType preferred_type =
+        prefer_low_power ? VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU
+                         : VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
     for (VkPhysicalDevice physical : physical_devices) {
       gfx::Adapter* candidate =
           ToAPIRef(new Adapter(RefPtr<Instance>(this), physical));
       if (!compatible_surface || candidate->SupportsSurface(compatible_surface)) {
         if (selected) {
-          // Prefer a discrete GPU over an already selected integrated one.
-          bool better =
-              candidate->GetProperties().deviceType ==
-                  VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU &&
-              selected->GetProperties().deviceType !=
-                  VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+          bool better = candidate->GetProperties().deviceType ==
+                            preferred_type &&
+                        selected->GetProperties().deviceType != preferred_type;
           if (better) {
             selected->Release();
             selected = candidate;

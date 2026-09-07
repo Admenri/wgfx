@@ -4,11 +4,13 @@
 
 #include "gfx/gfx_compute_pass_encoder.h"
 
+#include "gfx/common/ref_holder.h"
 #include "gfx/common/vulkan_conversions.h"
 #include "gfx/gfx_bind_group.h"
 #include "gfx/gfx_buffer.h"
 #include "gfx/gfx_command_encoder.h"
 #include "gfx/gfx_compute_pipeline.h"
+#include "gfx/gfx_query_set.h"
 #include "gfx/common/ref_holder.h"
 #include "gfx/gfx_device.h"
 
@@ -18,7 +20,20 @@ ComputePassEncoder::ComputePassEncoder(
     RefPtr<CommandEncoder> encoder,
     WGPUComputePassDescriptor const * descriptor)
     : encoder_(std::move(encoder)),
-      buffer_(encoder_->GetVkCommandBuffer()) {}
+      buffer_(encoder_->GetVkCommandBuffer()) {
+  if (descriptor && descriptor->timestampWrites &&
+      descriptor->timestampWrites->querySet) {
+    timestamp_writes_ = descriptor->timestampWrites;
+    encoder_->KeepResource(RefHolder::Of(
+        static_cast<gfx::QuerySet*>(timestamp_writes_->querySet)));
+    if (timestamp_writes_->beginningOfPassWriteIndex !=
+        WGPU_QUERY_SET_INDEX_UNDEFINED) {
+      encoder_->RecordTimestamp(timestamp_writes_->querySet,
+                                timestamp_writes_->beginningOfPassWriteIndex,
+                                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+    }
+  }
+}
 
 ComputePassEncoder::~ComputePassEncoder() = default;
 
@@ -68,6 +83,13 @@ void ComputePassEncoder::DispatchWorkgroupsIndirect(WGPUBuffer indirectBuffer, u
 
 void ComputePassEncoder::End() {
   ended_ = true;
+  if (timestamp_writes_ &&
+      timestamp_writes_->endOfPassWriteIndex !=
+          WGPU_QUERY_SET_INDEX_UNDEFINED) {
+    encoder_->RecordTimestamp(timestamp_writes_->querySet,
+                              timestamp_writes_->endOfPassWriteIndex,
+                              VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+  }
 }
 
 void ComputePassEncoder::SetLabel(WGPUStringView label) {}

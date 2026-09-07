@@ -39,6 +39,9 @@ WGPUFuture ShaderModule::GetCompilationInfo(WGPUCompilationInfoCallbackInfo call
   return WGPUFuture{0};
 }
 
-void ShaderModule::SetLabel(WGPUStringView label) {}
+void ShaderModule::SetLabel(WGPUStringView label) {
+  // Shader modules are destroyed after pipeline creation, so no Vulkan
+  // object name is attached; the label is kept for the WebGPU object.
+}
 
 }  // namespace gfx

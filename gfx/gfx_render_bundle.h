@@ -28,6 +28,10 @@ class RenderBundle : public WGPURenderBundleImpl,
 
   VkCommandBuffer GetVkCommandBuffer() const { return buffer_; }
   void KeepResource(RefHolder holder);
+  // Moves a finished resource list into this bundle.
+  void AdoptResources(std::vector<RefHolder> holders) {
+    resources_ = std::move(holders);
+  }
 
   void SetLabel(WGPUStringView label);
 

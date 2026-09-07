@@ -43,6 +43,10 @@ class Device : public WGPUDeviceImpl, public RefCounted<Device> {
   const WGPULimits& GetDeviceLimits() const { return limits_; }
   // Whether the feature was requested and enabled on this device.
   bool IsFeatureEnabled(WGPUFeatureName feature) const;
+  // Names a Vulkan object for debugging tools (no-op when the debug utils
+  // extension is unavailable or the label is empty).
+  void SetObjectLabel(uint64_t handle, VkObjectType type,
+                      WGPUStringView label);
 
   // Renders everything in GENERAL layout; no explicit transitions needed.
   static constexpr VkImageLayout kImageLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -121,6 +125,7 @@ class Device : public WGPUDeviceImpl, public RefCounted<Device> {
 
   VkSemaphore acquire_semaphore_ = VK_NULL_HANDLE;
   VkSemaphore render_done_semaphore_ = VK_NULL_HANDLE;
+  PFN_vkSetDebugUtilsObjectNameEXT set_object_name_ = nullptr;
 };
 
 }  // namespace gfx

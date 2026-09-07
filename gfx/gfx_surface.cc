@@ -212,8 +212,12 @@ void Surface::Configure(WGPUSurfaceConfiguration const * config) {
   create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
   create_info.presentMode = GetPresentMode(config->presentMode);
   create_info.clipped = VK_TRUE;
+  if (config->viewFormatCount)
+    create_info.flags |= VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR;
 
   vkCreateSwapchainKHR(vk_device, &create_info, nullptr, &swapchain_);
+  device_->SetObjectLabel(reinterpret_cast<uint64_t>(swapchain_),
+                          VK_OBJECT_TYPE_SWAPCHAIN_KHR, label_);
 
   uint32_t swapchain_image_count = 0;
   vkGetSwapchainImagesKHR(vk_device, swapchain_, &swapchain_image_count,
@@ -322,7 +326,17 @@ void Surface::Unconfigure() {
   device_ = nullptr;
 }
 
-void Surface::SetLabel(WGPUStringView label) {}
+void Surface::SetLabel(WGPUStringView label) {
+  label_ = label;
+  if (device_) {
+    device_->SetObjectLabel(reinterpret_cast<uint64_t>(surface_),
+                            VK_OBJECT_TYPE_SURFACE_KHR, label);
+    if (swapchain_) {
+      device_->SetObjectLabel(reinterpret_cast<uint64_t>(swapchain_),
+                              VK_OBJECT_TYPE_SWAPCHAIN_KHR, label);
+    }
+  }
+}
 
 void Surface::DestroySwapchain() {
   if (!device_)

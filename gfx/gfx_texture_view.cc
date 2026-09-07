@@ -65,6 +65,9 @@ TextureView::TextureView(RefPtr<Texture> texture,
 
   vkCreateImageView(texture_->GetDevice()->GetVkDevice(), &view_info, nullptr,
                     &image_view_);
+  texture_->GetDevice()->SetObjectLabel(
+      reinterpret_cast<uint64_t>(image_view_), VK_OBJECT_TYPE_IMAGE_VIEW,
+      descriptor->label);
 }
 
 TextureView::~TextureView() {
@@ -73,6 +76,10 @@ TextureView::~TextureView() {
                        nullptr);
 }
 
-void TextureView::SetLabel(WGPUStringView label) {}
+void TextureView::SetLabel(WGPUStringView label) {
+  texture_->GetDevice()->SetObjectLabel(
+      reinterpret_cast<uint64_t>(image_view_), VK_OBJECT_TYPE_IMAGE_VIEW,
+      label);
+}
 
 }  // namespace gfx

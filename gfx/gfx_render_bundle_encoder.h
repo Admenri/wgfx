@@ -49,6 +49,9 @@ class RenderBundleEncoder : public WGPURenderBundleEncoderImpl,
   VkCommandBuffer buffer_ = VK_NULL_HANDLE;
   bool finished_ = false;
   RenderPipeline* current_pipeline_ = nullptr;
+  // Compatibility render pass built from the encoder's declared formats;
+  // secondary command buffers require it for render-pass-continue records.
+  VkRenderPass render_pass_ = VK_NULL_HANDLE;
   std::vector<RefHolder> resources_;
 };
 

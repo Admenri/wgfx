@@ -53,6 +53,7 @@ class Surface : public WGPUSurfaceImpl, public RefCounted<Surface> {
   uint32_t acquired_index_ = 0;
   RefPtr<Texture> acquired_texture_;
   VkCommandPool present_pool_ = VK_NULL_HANDLE;
+  WGPUStringView label_ = WGPU_STRING_VIEW_INIT;
 };
 
 }  // namespace gfx

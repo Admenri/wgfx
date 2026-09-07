@@ -25,6 +25,8 @@ QuerySet::QuerySet(RefPtr<Device> device,
 
   vkCreateQueryPool(device_->GetVkDevice(), &create_info, nullptr,
                     &query_pool_);
+  device_->SetObjectLabel(reinterpret_cast<uint64_t>(query_pool_),
+                          VK_OBJECT_TYPE_QUERY_POOL, descriptor->label);
 }
 
 QuerySet::~QuerySet() {
@@ -32,7 +34,10 @@ QuerySet::~QuerySet() {
     vkDestroyQueryPool(device_->GetVkDevice(), query_pool_, nullptr);
 }
 
-void QuerySet::SetLabel(WGPUStringView label) {}
+void QuerySet::SetLabel(WGPUStringView label) {
+  device_->SetObjectLabel(reinterpret_cast<uint64_t>(query_pool_),
+                          VK_OBJECT_TYPE_QUERY_POOL, label);
+}
 
 WGPUQueryType QuerySet::GetType() { return type_; }
 

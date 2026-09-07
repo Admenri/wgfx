@@ -193,6 +193,16 @@ Device::Device(RefPtr<Adapter> adapter, WGPUDeviceDescriptor const * descriptor)
   PopulateDefaultLimits();
 
   queue_object_ = RefPtr<Queue>(new Queue(RefPtr<Device>(this)));
+
+  set_object_name_ = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(
+      vkGetDeviceProcAddr(device_, "vkSetDebugUtilsObjectNameEXT"));
+  SetObjectLabel(reinterpret_cast<uint64_t>(device_),
+                 VK_OBJECT_TYPE_DEVICE, descriptor ? descriptor->label
+                                                   : WGPUStringView{});
+  SetObjectLabel(reinterpret_cast<uint64_t>(queue_),
+                 VK_OBJECT_TYPE_QUEUE,
+                 descriptor ? descriptor->defaultQueue.label
+                            : WGPUStringView{});
 }
 
 Device::~Device() {
@@ -469,6 +479,21 @@ WGPUFuture Device::PopErrorScope(WGPUPopErrorScopeCallbackInfo callbackInfo) {
 }
 
 void Device::SetLabel(WGPUStringView label) {
+  SetObjectLabel(reinterpret_cast<uint64_t>(device_), VK_OBJECT_TYPE_DEVICE,
+                 label);
+}
+
+void Device::SetObjectLabel(uint64_t handle, VkObjectType type,
+                            WGPUStringView label) {
+  if (!set_object_name_ || !handle || !label.data || !label.length)
+    return;
+  std::string name(FromWGPUStringView(label));
+  VkDebugUtilsObjectNameInfoEXT info = {};
+  info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+  info.objectType = type;
+  info.objectHandle = handle;
+  info.pObjectName = name.c_str();
+  set_object_name_(device_, &info);
 }
 
 }  // namespace gfx

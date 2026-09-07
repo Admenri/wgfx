@@ -40,6 +40,10 @@ CommandEncoder::CommandEncoder(RefPtr<Device> device,
   begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
   vkBeginCommandBuffer(buffer_, &begin_info);
+
+  device_->SetObjectLabel(reinterpret_cast<uint64_t>(buffer_),
+                          VK_OBJECT_TYPE_COMMAND_BUFFER,
+                          descriptor ? descriptor->label : WGPUStringView{});
 }
 
 CommandEncoder::~CommandEncoder() {
@@ -60,10 +64,8 @@ gfx::CommandBuffer* CommandEncoder::Finish(WGPUCommandBufferDescriptor const * d
   vkEndCommandBuffer(buffer_);
   gfx::CommandBuffer* command_buffer =
       ToAPIRef(new CommandBuffer(device_, pool_, buffer_));
-  for (RefHolder& holder : resources_)
-    command_buffer->KeepResource(std::move(holder));
-  for (std::function<void()>& destroy : vulkan_cleanup_)
-    command_buffer->KeepVulkanResource(std::move(destroy));
+  command_buffer->AdoptResources(std::move(resources_),
+                                 std::move(vulkan_cleanup_));
   return command_buffer;
 }
 
@@ -215,6 +217,11 @@ void CommandEncoder::ResolveQuerySet(WGPUQuerySet querySet, uint32_t firstQuery,
 }
 
 void CommandEncoder::WriteTimestamp(WGPUQuerySet querySet, uint32_t queryIndex) {
+  RecordTimestamp(querySet, queryIndex, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+}
+
+void CommandEncoder::RecordTimestamp(WGPUQuerySet querySet, uint32_t queryIndex,
+                                     VkPipelineStageFlags stage) {
   gfx::QuerySet* query_set = static_cast<gfx::QuerySet*>(querySet);
   KeepResource(RefHolder::Of(query_set));
   if (!IsQueryPoolReset(query_set)) {
@@ -222,7 +229,7 @@ void CommandEncoder::WriteTimestamp(WGPUQuerySet querySet, uint32_t queryIndex) 
                         query_set->GetCount());
     reset_query_pools_.push_back(query_set);
   }
-  vkCmdWriteTimestamp(buffer_, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+  vkCmdWriteTimestamp(buffer_, static_cast<VkPipelineStageFlagBits>(stage),
                       query_set->GetVkQueryPool(), queryIndex);
 }
 
@@ -234,6 +241,9 @@ bool CommandEncoder::IsQueryPoolReset(gfx::QuerySet* query_set) const {
   return false;
 }
 
-void CommandEncoder::SetLabel(WGPUStringView label) {}
+void CommandEncoder::SetLabel(WGPUStringView label) {
+  device_->SetObjectLabel(reinterpret_cast<uint64_t>(buffer_),
+                          VK_OBJECT_TYPE_COMMAND_BUFFER, label);
+}
 
 }  // namespace gfx

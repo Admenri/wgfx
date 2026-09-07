@@ -26,6 +26,19 @@ This produces the `wgfx` shared library plus two test executables:
   compressed texture sampling, float32 blending/filterability, clip
   distances, component swizzle, and more. Each test is gated on the device
   advertising the feature.
+- `wgfx_bunny_*` — bunny-mark benchmarks (`tests/bunny_benchmark.cc`), built
+  as six variants through the `bunny_benchmarks` meta target: batched
+  (10 bunnies per draw call) vs one draw call per bunny, crossed with a
+  shared storage buffer, per-bunny uniform buffers + bind groups, or no
+  uniform transport (CPU-baked vertices). Selected via `BUNNY_BATCH_MODE`,
+  `BUNNY_UNIFORM_MODE`, `BUNNY_COUNT`, `BUNNY_FRAMES`, `BUNNY_BATCH_SIZE`.
+- `wgfx_quad_benchmark` — the sokol-gfx "sg" quad demo adapted for wgfx
+  (`tests/quad_benchmark.cc`): one 3-vertex triangle-strip quad drawn 10000
+  times per frame with a per-draw rotation angle pushed through the
+  pipeline's immediate-data block (`wgpuRenderPassEncoderSetImmediates`,
+  i.e. push constants), presented VSYNC'd to a GLFW window. FPS logs to
+  stderr every 500 ms; draw iterations configurable via
+  `QUAD_DRAW_ITERATIONS`.
 
-Debug builds enable the Khronos validation layer automatically; both suites
+Debug builds enable the Khronos validation layer automatically; all suites
 run clean (zero validation messages).
