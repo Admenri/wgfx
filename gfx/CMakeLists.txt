@@ -68,9 +68,14 @@ target_link_libraries(wgfx PUBLIC
 )
 
 # volk must expose the platform WSI entry points the surface implementation
-# loads through it (vkCreateWin32SurfaceKHR on Windows, XCB/Wayland on Linux).
+# loads through it, with the same VK_USE_PLATFORM_* set as the wgfx target
+# (see gfx/gfx_common.h).
 if (WIN32)
   target_compile_definitions(volk PRIVATE VK_USE_PLATFORM_WIN32_KHR)
+elseif (APPLE)
+  target_compile_definitions(volk PRIVATE VK_USE_PLATFORM_METAL_EXT)
+elseif (ANDROID)
+  target_compile_definitions(volk PRIVATE VK_USE_PLATFORM_ANDROID_KHR)
 elseif (UNIX)
   target_compile_definitions(volk PRIVATE
     VK_USE_PLATFORM_XCB_KHR

@@ -40,10 +40,17 @@ Instance::Instance(WGPUInstanceDescriptor const * descriptor) {
   app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
   app_info.apiVersion = api_version_;
 
-  const char* extensions[] = {
+  // Desired WSI extensions per target platform. Only the ones the loader
+  // reports as available are enabled, so systems without (e.g.) Wayland
+  // still work through XCB/Xlib and vice versa.
+  std::vector<const char*> desired_extensions = {
       VK_KHR_SURFACE_EXTENSION_NAME,
 #if defined(_WIN32)
       VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+#elif defined(__APPLE__)
+      VK_EXT_METAL_SURFACE_EXTENSION_NAME,
+#elif defined(__ANDROID__)
+      VK_KHR_ANDROID_SURFACE_EXTENSION_NAME,
 #elif defined(__linux__)
       VK_KHR_XCB_SURFACE_EXTENSION_NAME,
       VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
@@ -51,16 +58,28 @@ Instance::Instance(WGPUInstanceDescriptor const * descriptor) {
 #endif
   };
 
+  uint32_t available_count = 0;
+  vkEnumerateInstanceExtensionProperties(nullptr, &available_count, nullptr);
+  std::vector<VkExtensionProperties> available(available_count);
+  if (available_count)
+    vkEnumerateInstanceExtensionProperties(nullptr, &available_count,
+                                           available.data());
+  std::vector<const char*> extensions;
+  for (const char* desired : desired_extensions) {
+    for (const VkExtensionProperties& extension : available) {
+      if (std::strcmp(extension.extensionName, desired) == 0) {
+        extensions.push_back(desired);
+        break;
+      }
+    }
+  }
+
   VkInstanceCreateInfo create_info = {};
   create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
   create_info.pApplicationInfo = &app_info;
-  create_info.enabledExtensionCount = 1;
-#if defined(_WIN32)
-  create_info.enabledExtensionCount = 2;
-#elif defined(__linux__)
-  create_info.enabledExtensionCount = 4;
-#endif
-  create_info.ppEnabledExtensionNames = extensions;
+  create_info.enabledExtensionCount =
+      static_cast<uint32_t>(extensions.size());
+  create_info.ppEnabledExtensionNames = extensions.data();
 
 #if !defined(NDEBUG) && !defined(WGFX_NO_VALIDATION)
   // Validation messages surface API misuse in debug builds only. Define

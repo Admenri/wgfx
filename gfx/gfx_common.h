@@ -10,11 +10,18 @@
 #include <string_view>
 #include <vector>
 
+/* Enable every WSI platform this build can target. The instance only
+ * requests the WSI extensions the loader actually exposes (see
+ * Instance::Instance), so missing platform libraries degrade gracefully. */
 #if defined(_WIN32)
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #define VK_USE_PLATFORM_WIN32_KHR
+#elif defined(__APPLE__)
+#define VK_USE_PLATFORM_METAL_EXT
+#elif defined(__ANDROID__)
+#define VK_USE_PLATFORM_ANDROID_KHR
 #elif defined(__linux__)
 #define VK_USE_PLATFORM_XCB_KHR
 #define VK_USE_PLATFORM_XLIB_KHR

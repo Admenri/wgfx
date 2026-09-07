@@ -44,9 +44,48 @@ void Surface::Initialize(WGPUSurfaceDescriptor const * descriptor) {
       break;
     }
   }
+#elif defined(__APPLE__)
+  for (const WGPUChainedStruct* chain = descriptor->nextInChain; chain;
+       chain = chain->next) {
+    if (chain->sType == WGPUSType_SurfaceSourceMetalLayer) {
+      auto* source = reinterpret_cast<const WGPUSurfaceSourceMetalLayer*>(chain);
+      VkMetalSurfaceCreateInfoEXT create_info = {};
+      create_info.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
+      create_info.pLayer = source->layer;
+      vkCreateMetalSurfaceEXT(instance_->GetVkInstance(), &create_info,
+                              nullptr, &surface_);
+      break;
+    }
+  }
+#elif defined(__ANDROID__)
+  for (const WGPUChainedStruct* chain = descriptor->nextInChain; chain;
+       chain = chain->next) {
+    if (chain->sType == WGPUSType_SurfaceSourceAndroidNativeWindow) {
+      auto* source =
+          reinterpret_cast<const WGPUSurfaceSourceAndroidNativeWindow*>(chain);
+      VkAndroidSurfaceCreateInfoKHR create_info = {};
+      create_info.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
+      create_info.window =
+          reinterpret_cast<ANativeWindow*>(source->window);
+      vkCreateAndroidSurfaceKHR(instance_->GetVkInstance(), &create_info,
+                                nullptr, &surface_);
+      break;
+    }
+  }
 #elif defined(__linux__)
   for (const WGPUChainedStruct* chain = descriptor->nextInChain; chain;
        chain = chain->next) {
+    if (chain->sType == WGPUSType_SurfaceSourceXlibWindow) {
+      auto* source = reinterpret_cast<const WGPUSurfaceSourceXlibWindow*>(chain);
+      VkXlibSurfaceCreateInfoKHR create_info = {};
+      create_info.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
+      create_info.dpy =
+          reinterpret_cast<Display*>(source->display);
+      create_info.window = static_cast<Window>(source->window);
+      vkCreateXlibSurfaceKHR(instance_->GetVkInstance(), &create_info,
+                             nullptr, &surface_);
+      break;
+    }
     if (chain->sType == WGPUSType_SurfaceSourceXCBWindow) {
       auto* source = reinterpret_cast<const WGPUSurfaceSourceXCBWindow*>(chain);
       VkXcbSurfaceCreateInfoKHR create_info = {};

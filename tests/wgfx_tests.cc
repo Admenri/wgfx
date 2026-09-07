@@ -25,6 +25,10 @@
 #if defined(_WIN32)
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include "GLFW/glfw3native.h"
+#elif defined(__linux__)
+#define GLFW_EXPOSE_NATIVE_X11
+#define GLFW_EXPOSE_NATIVE_WAYLAND
+#include "GLFW/glfw3native.h"
 #endif
 
 #include "triangle.vert.spv.h"
@@ -421,21 +425,38 @@ void TestSurfacePresentation(WGPUInstance instance, WGPUDevice device,
                                         nullptr, nullptr);
   CHECK(window != nullptr, "GLFW window creation");
 
+  WGPUSurfaceDescriptor surface_descriptor = {};
 #if defined(_WIN32)
   WGPUSurfaceSourceWindowsHWND hwnd_source = {};
   hwnd_source.chain.next = nullptr;
   hwnd_source.chain.sType = WGPUSType_SurfaceSourceWindowsHWND;
   hwnd_source.hinstance = reinterpret_cast<void*>(GetModuleHandle(nullptr));
   hwnd_source.hwnd = reinterpret_cast<void*>(glfwGetWin32Window(window));
-
-  WGPUSurfaceDescriptor surface_descriptor = {};
   surface_descriptor.nextInChain = &hwnd_source.chain;
-  WGPUSurface surface =
-      wgpuInstanceCreateSurface(instance, &surface_descriptor);
-  CHECK(surface != nullptr, "surface creation from HWND");
+#elif defined(__linux__)
+  if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
+    static WGPUSurfaceSourceWaylandSurface wayland_source = {};
+    wayland_source.chain.next = nullptr;
+    wayland_source.chain.sType = WGPUSType_SurfaceSourceWaylandSurface;
+    wayland_source.display = glfwGetWaylandDisplay();
+    wayland_source.surface = glfwGetWaylandWindow(window);
+    surface_descriptor.nextInChain = &wayland_source.chain;
+  } else {
+    static WGPUSurfaceSourceXlibWindow xlib_source = {};
+    xlib_source.chain.next = nullptr;
+    xlib_source.chain.sType = WGPUSType_SurfaceSourceXlibWindow;
+    xlib_source.display = glfwGetX11Display();
+    xlib_source.window = glfwGetX11Window(window);
+    surface_descriptor.nextInChain = &xlib_source.chain;
+  }
 #else
   WGPUSurface surface = nullptr;
-  CHECK(false, "surface test requires Win32 in this build");
+  CHECK(false, "surface test unsupported on this platform in this build");
+#endif
+#if defined(_WIN32) || defined(__linux__)
+  WGPUSurface surface =
+      wgpuInstanceCreateSurface(instance, &surface_descriptor);
+  CHECK(surface != nullptr, "surface creation from native window");
 #endif
 
   if (surface) {

@@ -3,7 +3,13 @@
 A native WebGPU implementation built on top of Vulkan.  
 
 Shaders are consumed as **SPIR-V** (`WGPUShaderSourceSPIRV`); WGSL can be
-used by transpiling it to SPIR-V ahead of time.  
+used by transpiling it to SPIR-V ahead of time.
+
+Surfaces are supported on every Vulkan WSI platform: `WindowsHWND`,
+`XcbWindow`, `XlibWindow`, and `WaylandSurface` (Linux), `MetalLayer`
+(macOS/iOS via MoltenVK), and `AndroidNativeWindow`. The instance requests
+only the WSI extensions the loader actually exposes, so a Linux system
+without Wayland still works through XCB/Xlib and vice versa.
 
 ## Building
 

@@ -40,6 +40,10 @@
 #if defined(_WIN32)
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include "GLFW/glfw3native.h"
+#elif defined(__linux__)
+#define GLFW_EXPOSE_NATIVE_X11
+#define GLFW_EXPOSE_NATIVE_WAYLAND
+#include "GLFW/glfw3native.h"
 #endif
 
 #include "webgpu-headers/webgpu.h"
@@ -194,26 +198,37 @@ static bool init_wgpu(wgpu_ctx* ctx, GLFWwindow* win) {
   }
 
   /* Grab the native Win32 HWND from the GLFW window. */
+  WGPUSurfaceSourceWindowsHWND hwnd_source_win = {};
+  static WGPUSurfaceSourceXlibWindow xlib_source = {};
+  static WGPUSurfaceSourceWaylandSurface wayland_source = {};
+  WGPUSurfaceDescriptor surface_desc = {};
 #if defined(_WIN32)
   HWND hwnd = glfwGetWin32Window(win);
   if (!hwnd) {
     std::printf("[wgpu] no Win32 HWND available from GLFW window\n");
     return false;
   }
-  HINSTANCE hinstance = GetModuleHandle(NULL);
+  hwnd_source_win.chain.sType = WGPUSType_SurfaceSourceWindowsHWND;
+  hwnd_source_win.hinstance = GetModuleHandle(NULL);
+  hwnd_source_win.hwnd = hwnd;
+  surface_desc.nextInChain = &hwnd_source_win.chain;
+#elif defined(__linux__)
+  if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
+    wayland_source.chain.sType = WGPUSType_SurfaceSourceWaylandSurface;
+    wayland_source.display = glfwGetWaylandDisplay();
+    wayland_source.surface = glfwGetWaylandWindow(win);
+    surface_desc.nextInChain = &wayland_source.chain;
+  } else {
+    xlib_source.chain.sType = WGPUSType_SurfaceSourceXlibWindow;
+    xlib_source.display = glfwGetX11Display();
+    xlib_source.window = glfwGetX11Window(win);
+    surface_desc.nextInChain = &xlib_source.chain;
+  }
 #else
-  std::printf("[wgpu] this benchmark requires a Win32 surface source\n");
+  std::printf("[wgpu] this benchmark has no surface source on this platform\n");
   return false;
 #endif
 
-  WGPUSurfaceSourceWindowsHWND surface_source = {};
-  surface_source.chain.next = NULL;
-  surface_source.chain.sType = WGPUSType_SurfaceSourceWindowsHWND;
-  surface_source.hinstance = hinstance;
-  surface_source.hwnd = hwnd;
-
-  WGPUSurfaceDescriptor surface_desc = {};
-  surface_desc.nextInChain = (WGPUChainedStruct*)&surface_source;
   ctx->surface = wgpuInstanceCreateSurface(ctx->instance, &surface_desc);
   if (!ctx->surface) {
     std::printf("[wgpu] wgpuInstanceCreateSurface failed\n");
